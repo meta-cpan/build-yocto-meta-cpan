@@ -1,0 +1,21 @@
+#!/bin/bash
+
+mkdir -p ~/gpw-community-bsp/sources
+cd ~/gpw-community-bsp/
+git clone -b master https://github.com/rehsack/gpw-yocto-platform.git
+cd sources
+git clone -b master https://github.com/rehsack/poky.git
+cd poky
+git remote add upstream git://git.yoctoproject.org/poky
+git fetch upstream
+git rebase upstream/master
+cd ..
+git clone -b master https://github.com/rehsack/meta-openembedded.git
+cd meta-openembedded
+git remote add upstream git://git.openembedded.org/meta-openembedded
+git fetch upstream
+git rebase upstream/master
+cd ..
+git clone -b master https://github.com/meta-cpan/meta-cpan.git
+git clone -b master https://github.com/rehsack/meta-jens.git
+git clone -b master https://github.com/rehsack/meta-gpw.git

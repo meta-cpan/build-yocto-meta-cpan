@@ -1,0 +1,7 @@
+#!/bin/bash
+
+echo "Reseting user ${USER}"
+
+cd ~
+rm -rf gpw-community-bsp prj perl5 .cpan .cpanm .gitconfig ".local" .bashhistory
+(cd /etc/skel && tar cf - .) | tar xf -

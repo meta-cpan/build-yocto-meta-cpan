@@ -1,0 +1,62 @@
+#!/bin/bash
+
+set -x
+set -e
+
+PROG="$0"
+DEPLOY_COMP="$1"
+shift
+
+SRV_HOME="/home/gpw2018"
+TFTPD_HOME="${SRV_HOME}/tftpd"
+NFS_HOME="${SRV_HOME}/nfs"
+
+bail_out() {
+    echo "$PROG: $@" >&2
+    exit 1
+}
+
+deploy_boot() {
+    BOOTSCRIPT="$(readlink ${DEPLOYDIR}/bootscript)"
+    BOOTTYPE="$(echo ${BOOTSCRIPT} | sed -e 's/bootscript[^\.]*\.\([a-z]*\)/\1/')"
+    test "${BOOTTYPE}" = "nfs" || bail_out "Missing bootscript.nfs"
+    # XXX resolve ${BRANCH} & ${KERNEL_VERSION}
+    cp -L ${DEPLOYDIR}/${KERNEL_DEVICE_TREE} ${DEPLOYDIR}/${KERNEL_IMAGETYPE} ${TFTPD_HOME}/${MACHINE}/master/4.14/
+    cp -L ${DEPLOYDIR}/bootscript ${TFTPD_HOME}/bootscript.vlan${VLAN_GRP}0
+}
+
+deploy_root() {
+    BOOTSCRIPT="$(readlink ${DEPLOYDIR}/bootscript)"
+    BOOTTYPE="$(echo ${BOOTSCRIPT} | sed -e 's/bootscript[^\.]*\.\([a-z]*\)/\1/')"
+    test "${BOOTTYPE}" = "nfs" || bail_out "Missing bootscript.nfs"
+    cd ${NFS_HOME}/gpw2018_wendy_rocko/ && \
+      sudo rm -rf * && \
+      sudo tar xjf ${DEPLOYDIR}/updatable-core-image-nfs-wendy.tar.bz2 && \
+      sudo cp ${SRV_HOME}/hosts etc/hosts
+}
+
+deploy_flash() {
+    BOOTSCRIPT="$(readlink ${DEPLOYDIR}/bootscript)"
+    BOOTTYPE="$(echo ${BOOTSCRIPT} | sed -e 's/bootscript[^\.]*\.\([a-z]*\)/\1/')"
+    test "${BOOTTYPE}" = "nfs" && bail_out "You can't flash nfs boot"
+    test "${BOOTTYPE}" = "${WANTED_ROOT_DEV}" || bail_out "Missing bootscript.${WANTED_ROOT_DEV}"
+    FLASH_BASE="${NFS_HOME}/data_prd_${VLAN_GRP}0/flashimg"
+    rm -rf ${FLASH_BASE}/*
+    mkdir -p ${FLASH_BASE}/updatable-app-image-${WANTED_ROOT_DEV}-complete
+    cd ${FLASH_BASE}/updatable-app-image-${WANTED_ROOT_DEV}-complete && \
+      tar xjf ${DEPLOYDIR}/updatable-app-image-${WANTED_ROOT_DEV}-complete.cpi
+}
+
+test -n "${VLAN_GRP}" -a -n "${WANTED_ROOT_DEV}" || bail_out "Both \$VLAN_GRP and \$WANTED_ROOT_DEV must be set"
+test -d "${NFS_HOME}/data_prd_${VLAN_GRP}0" || bail_out "Missing ${NFS_HOME}/data_prd_${VLAN_GRP}0"
+
+test "${DEPLOY_COMP}" = "boot" -o "${DEPLOY_COMP}" = "root" -o "${DEPLOY_COMP}" = "flash" || bail_out "Unsupported deploy component"
+
+test -n "${BUILDDIR}" -a -d "${BUILDDIR}" || bail_out "Missing sane set environment variable \$BUILDDIR"
+SYSTEM_IMAGE_VARIABLES="MACHINE_ARCH|KERNEL_DEVICETREE|KERNEL_IMAGETYPE"
+BITBAKE_SETTINGS=$(bitbake -e system-image | egrep "^($SYSTEM_IMAGE_VARIABLES)=" | \
+  sed -e "s/MACHINE_ARCH/MACHINE/" -e "s/KERNEL_DEVICETREE/KERNEL_DEVICE_TREE/")
+eval $BITBAKE_SETTINGS
+DEPLOYDIR="${BUILDDIR}/tmp/deploy/images/${MACHINE}"
+
+eval "deploy_${DEPLOY_COMP}"

@@ -1,0 +1,41 @@
+#!/bin/bash
+
+perlbrew init
+source ~/perl5/perlbrew/etc/bashrc
+
+perlbrew install-multiple --notest perl-5.24.4 perl-5.28.0
+perlbrew install-cpanm
+perlbrew use 5.24.4
+
+echo "yes" | cpan
+
+source ~/gpw-community-bsp/sources/poky/scripts/oe-init-bashrc
+oe_builddir use ~/gpw-community-bsp/gpw-yocto-platform
+
+mkdir ~/prj
+cd ~/prj
+git clone https://github.com/log4cplus/log4cplus.git
+git clone https://github.com/perl5-utils/Lib-Log4cplus.git
+git clone https://github.com/perl5-utils/Log-Any-Adapter-Log4cplus.git
+git clone https://github.com/rehsack/Packager-Utils.git
+
+cd Lib-Log4cplus
+cpanm --notest --with-recommends --with-suggests inc::latest Config::AutoConf Test::WriteVariants
+env CC="gcc -pthread" CCLD="gcc -pthread" cpanm --notest --with-recommends --with-suggests --with-develop --installdeps .
+env CC="gcc -pthread" CCLD="gcc -pthread" perl Makefile.PL
+make && make install
+cd ..
+
+cd Log-Any-Adapter-Log4cplus
+cpanm --notest --with-recommends --with-suggests --with-develop --installdeps .
+perl Makefile.PL
+make && make install
+cd ..
+
+cd Packager-Utils
+cpanm File::ShareDir::Install
+cpanm --notest --with-recommends --with-suggests --with-develop --installdeps .
+
+perl Makefile.PL
+make && env BBPATH=$BUILDDIR perl -Mblib bin/pkg_util check up2date -o log -o html --packages_pattern "*-perl_*.bb" --packages_pattern "perl*.bb"
+cd ..
